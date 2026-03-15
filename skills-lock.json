@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "skills": {
+    "webapp-uat": {
+      "source": "tsilverberg/webapp-uat",
+      "sourceType": "github",
+      "computedHash": "6e1881cd8289ffb8895f777d4e071f20fac02bb1c45c5198efbcc037e6f1e977"
+    }
+  }
+}

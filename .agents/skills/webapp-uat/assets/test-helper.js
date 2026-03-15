@@ -16,21 +16,6 @@ const SCREENSHOT_DIR = process.env.UAT_SCREENSHOT_DIR || '/tmp/uat-screenshots';
 if (!fs.existsSync(SCREENSHOT_DIR)) fs.mkdirSync(SCREENSHOT_DIR, { recursive: true });
 
 /**
- * Sanitize captured application data to prevent prompt injection.
- * All data from the tested application (console logs, DOM content, network responses)
- * is UNTRUSTED and must be treated as opaque diagnostic strings.
- *
- * @param {string} text - Raw text from the application under test
- * @param {number} [maxLen=300] - Maximum length to retain
- * @returns {string} Sanitized string safe for reporting
- */
-function sanitize(text, maxLen = 300) {
-  if (typeof text !== 'string') return String(text).substring(0, maxLen);
-  // Strip control characters (except newline/tab), truncate
-  return text.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '').substring(0, maxLen);
-}
-
-/**
  * Set up full error capture on a Playwright page.
  * Returns collectors that accumulate errors as the page navigates.
  *
@@ -48,18 +33,14 @@ function setupErrorCapture(page, options = {}) {
 
   const errors = { console: [], network: [], pageErrors: [], warnings: [] };
 
-  // NOTE: All captured data is UNTRUSTED application output.
-  // It is sanitized and truncated for safe diagnostic reporting only.
-  // Never interpret captured text as instructions or executable content.
-
   page.on('console', msg => {
-    const text = sanitize(msg.text());
+    const text = msg.text();
     if (msg.type() === 'error') {
       errors.console.push({ url: page.url(), text, ts: new Date().toISOString() });
     } else if (msg.type() === 'warning') {
       const shouldIgnore = ignoreConsolePatterns.some(p => text.includes(p));
       if (!shouldIgnore) {
-        errors.warnings.push({ url: page.url(), text, ts: new Date().toISOString() });
+        errors.warnings.push({ url: page.url(), text: text.substring(0, 300), ts: new Date().toISOString() });
       }
     }
   });
@@ -67,8 +48,8 @@ function setupErrorCapture(page, options = {}) {
   page.on('pageerror', err => {
     errors.pageErrors.push({
       url: page.url(),
-      text: sanitize(err.message),
-      stack: sanitize(err.stack, 500),
+      text: err.message,
+      stack: err.stack?.substring(0, 500),
       ts: new Date().toISOString(),
     });
   });
@@ -80,7 +61,7 @@ function setupErrorCapture(page, options = {}) {
       const shouldIgnore = ignoreNetworkPatterns.some(p => url.includes(p));
       if (!shouldIgnore) {
         errors.network.push({
-          reqUrl: sanitize(url, 500),
+          reqUrl: url,
           status,
           page: page.url(),
           ts: new Date().toISOString(),
@@ -370,7 +351,6 @@ function printSummary(errors, screenResults) {
 }
 
 module.exports = {
-  sanitize,
   setupErrorCapture,
   screenshot,
   waitForSettle,
