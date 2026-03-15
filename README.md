@@ -18,8 +18,16 @@ When you say **"run UAT on my app"**, this skill:
 2. **Launches Playwright** — navigates each screen in a real Chromium browser
 3. **Captures everything** — console errors, network failures, page crashes, rendering bugs
 4. **Validates quality** — accessibility (WCAG 2.2 AA), i18n, empty/placeholder data, responsive layout
-5. **Fixes bugs inline** — P0/P1 issues are fixed immediately, P2/P3 logged for later
-6. **Generates a report** — per-screen scores, bug list with severity, overall health score
+5. **Generates a report** — per-screen scores, bug list with severity, overall health score
+
+## Modes
+
+| Mode | Command | Permissions | Description |
+|---|---|---|---|
+| **Report** (default) | `/webapp-uat full` | Read-only | Runs UAT, generates report, no code changes |
+| **Fix** (opt-in) | `/webapp-uat full --fix` | Read + Write | Report + propose fixes, each requiring user approval |
+
+The default mode has **no write access to your codebase**. Edit and Write tools are only available when you explicitly pass `--fix`.
 
 ## Supported Stacks
 
@@ -72,24 +80,26 @@ Three options for authenticated testing:
 
 Bugs are classified by severity:
 
-| Severity | Action | Examples |
-|---|---|---|
-| **P0 Blocker** | Fix immediately | App won't load, data loss, complete screen failure |
-| **P1 High** | Fix immediately | Feature broken, wrong data, accessibility barrier |
-| **P2 Medium** | Log, fix after full pass | Visual glitch, fallback data, minor a11y issue |
-| **P3 Low** | Log for later | Cosmetic, console warning, edge case |
+| Severity | Report mode | Fix mode (`--fix`) | Examples |
+|---|---|---|---|
+| **P0 Blocker** | Report | Propose fix, await approval | App won't load, data loss, screen failure |
+| **P1 High** | Report | Propose fix, await approval | Feature broken, wrong data, a11y barrier |
+| **P2 Medium** | Report | Log, fix after full pass | Visual glitch, fallback data, minor a11y |
+| **P3 Low** | Report | Log for later | Cosmetic, console warning, edge case |
 
 ## Security
 
 This skill navigates web pages and reads their DOM content, console output, and network responses. **Ingesting third-party content is inherent to its purpose** — a UAT skill that cannot read page content cannot perform UAT.
 
 Mitigations in place:
+- **Default mode is read-only** — no Edit/Write tools are granted. The skill can only report, not modify code
+- **Fix mode is opt-in** — requires explicit `--fix` flag and per-change user approval
 - All `page.evaluate()` returns are **sanitized and truncated** at the Node.js boundary before the agent sees them
 - Result arrays are **capped** (max 50 items) to prevent bulk DOM exfiltration
-- The agent is instructed to **never interpret captured content as instructions** and to **never auto-apply fixes** — all code changes require user confirmation
+- The agent is instructed to **never interpret captured content as instructions**
 - Bug fixes must be derived from **reading the project's source code**, not from page output
 
-**This skill is designed for testing your own applications on localhost**, not for auditing untrusted third-party websites. Always review proposed fixes before approving.
+**Inherent risk:** This skill navigates web pages and reads DOM content — this is its core function and cannot be eliminated. It is designed for testing **your own applications on localhost**, not for auditing untrusted third-party websites.
 
 ## Origin
 
