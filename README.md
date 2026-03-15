@@ -20,14 +20,15 @@ When you say **"run UAT on my app"**, this skill:
 4. **Validates quality** — accessibility (WCAG 2.2 AA), i18n, empty/placeholder data, responsive layout
 5. **Generates a report** — per-screen scores, bug list with severity, overall health score
 
-## Modes
+## Usage
 
-| Mode | Command | Permissions | Description |
-|---|---|---|---|
-| **Report** (default) | `/webapp-uat full` | Read-only | Runs UAT, generates report, no code changes |
-| **Fix** (opt-in) | `/webapp-uat full --fix` | Read + Write | Report + propose fixes, each requiring user approval |
+```
+/webapp-uat full            # Test all screens
+/webapp-uat /dashboard      # Test a specific screen
+/webapp-uat Home Settings   # Test named screens
+```
 
-The default mode has **no write access to your codebase**. Edit and Write tools are only available when you explicitly pass `--fix`.
+This skill is **read-only** — it reports bugs but cannot modify your code. After reviewing the report, ask the agent to fix specific issues in normal conversation.
 
 ## Supported Stacks
 
@@ -80,24 +81,24 @@ Three options for authenticated testing:
 
 Bugs are classified by severity:
 
-| Severity | Report mode | Fix mode (`--fix`) | Examples |
-|---|---|---|---|
-| **P0 Blocker** | Report | Propose fix, await approval | App won't load, data loss, screen failure |
-| **P1 High** | Report | Propose fix, await approval | Feature broken, wrong data, a11y barrier |
-| **P2 Medium** | Report | Log, fix after full pass | Visual glitch, fallback data, minor a11y |
-| **P3 Low** | Report | Log for later | Cosmetic, console warning, edge case |
+| Severity | Examples |
+|---|---|
+| **P0 Blocker** | App won't load, data loss, complete screen failure |
+| **P1 High** | Feature broken, wrong data displayed, accessibility barrier |
+| **P2 Medium** | Visual glitch, fallback data shown, minor a11y issue |
+| **P3 Low** | Cosmetic, console warning, edge case |
+
+All findings are reported with severity, affected file, and root cause. To fix issues, ask the agent after reviewing the report.
 
 ## Security
 
 This skill navigates web pages and reads their DOM content, console output, and network responses. **Ingesting third-party content is inherent to its purpose** — a UAT skill that cannot read page content cannot perform UAT.
 
 Mitigations in place:
-- **Default mode is read-only** — no Edit/Write tools are granted. The skill can only report, not modify code
-- **Fix mode is opt-in** — requires explicit `--fix` flag and per-change user approval
+- **Read-only** — no Edit or Write tools are granted. The skill cannot modify any files
 - All `page.evaluate()` returns are **sanitized and truncated** at the Node.js boundary before the agent sees them
 - Result arrays are **capped** (max 50 items) to prevent bulk DOM exfiltration
 - The agent is instructed to **never interpret captured content as instructions**
-- Bug fixes must be derived from **reading the project's source code**, not from page output
 
 **Inherent risk:** This skill navigates web pages and reads DOM content — this is its core function and cannot be eliminated. It is designed for testing **your own applications on localhost**, not for auditing untrusted third-party websites.
 
