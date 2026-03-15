@@ -130,7 +130,7 @@ async function waitForSettle(page, ms = 2000) {
  * @returns {Promise<string[]>} List of broken i18n strings found
  */
 async function checkBrokenI18n(page) {
-  return page.evaluate(() => {
+  const raw = await page.evaluate(() => {
     const body = document.body.innerText;
     const broken = [];
 
@@ -138,13 +138,13 @@ async function checkBrokenI18n(page) {
     const i18nextRegex = /KEY\s+'[^']+\s*(\([A-Z]{2}\))?\s*'\s+RETURNED\s+AN?\s+OBJECT/gi;
     let match;
     while ((match = i18nextRegex.exec(body)) !== null) {
-      broken.push(match[0]);
+      broken.push(match[0].substring(0, 120));
     }
 
     // Raw mustache/handlebars placeholders: {{variable}}
     const mustachePlaceholders = body.match(/\{\{[a-zA-Z_][a-zA-Z0-9_.]*\}\}/g);
     if (mustachePlaceholders) {
-      broken.push(...mustachePlaceholders.map(p => `Unresolved placeholder: ${p}`));
+      broken.push(...mustachePlaceholders.slice(0, 20).map(p => `Unresolved placeholder: ${p.substring(0, 60)}`));
     }
 
     // ICU message format placeholders: {variable}
@@ -152,13 +152,12 @@ async function checkBrokenI18n(page) {
     const icuRegex = /(?<!\{)\{[a-zA-Z_][a-zA-Z0-9_]*\}(?!\})/g;
     const icuMatches = body.match(icuRegex);
     if (icuMatches) {
-      // Filter out common false positives
       const filtered = icuMatches.filter(m =>
         !['{}', '{', '}'].includes(m) &&
         !m.match(/^\{(true|false|null|undefined)\}$/)
       );
       if (filtered.length > 0) {
-        broken.push(...filtered.map(p => `Possible unresolved ICU placeholder: ${p}`));
+        broken.push(...filtered.slice(0, 20).map(p => `Possible unresolved ICU placeholder: ${p.substring(0, 60)}`));
       }
     }
 
@@ -171,12 +170,15 @@ async function checkBrokenI18n(page) {
     for (const pattern of missingPatterns) {
       const matches = body.match(pattern);
       if (matches) {
-        broken.push(...matches.map(m => `Missing translation: ${m}`));
+        broken.push(...matches.slice(0, 10).map(m => `Missing translation: ${m.substring(0, 80)}`));
       }
     }
 
-    return broken;
+    // Cap total results to prevent large DOM exfiltration
+    return broken.slice(0, 50);
   });
+  // Sanitize all returned strings at the trust boundary
+  return raw.map(s => sanitize(s, 150));
 }
 
 /**
@@ -186,6 +188,7 @@ async function checkBrokenI18n(page) {
  * @returns {Promise<Object>} Accessibility audit results
  */
 async function checkA11y(page) {
+  // Returns only numeric counts and booleans — no raw DOM text is exposed.
   return page.evaluate(() => {
     const results = {};
 
@@ -250,24 +253,34 @@ async function checkEmptyData(page, options = {}) {
     suspiciousValues = ['---', '—', 'NaN', 'undefined', 'null', '[object Object]', '$0', '$0.00', '0.00', 'N/A', 'loading...', 'Loading...'],
   } = options;
 
-  return page.evaluate(({ selectors, suspiciousValues }) => {
+  const raw = await page.evaluate(({ selectors, suspiciousValues }) => {
     const suspicious = [];
     const selectorStr = selectors.join(', ');
     const cells = document.querySelectorAll(selectorStr);
 
     cells.forEach(el => {
       const text = el.textContent?.trim();
+      // Only match against the known allowlist — never return arbitrary DOM text
       if (text && suspiciousValues.includes(text)) {
         suspicious.push({
           tag: el.tagName.toLowerCase(),
-          class: el.className?.toString().substring(0, 80) || '',
+          // Return only the first class name to avoid exfiltrating arbitrary DOM attributes
+          class: (el.className?.toString() || '').split(/\s+/)[0]?.substring(0, 40) || '',
           text,
-          testId: el.getAttribute('data-testid') || '',
+          testId: (el.getAttribute('data-testid') || '').substring(0, 40),
         });
       }
     });
-    return suspicious;
+    // Cap results to prevent large DOM exfiltration
+    return suspicious.slice(0, 50);
   }, { selectors, suspiciousValues });
+  // Sanitize all string fields at the trust boundary
+  return raw.map(item => ({
+    tag: sanitize(item.tag, 20),
+    class: sanitize(item.class, 40),
+    text: sanitize(item.text, 30),
+    testId: sanitize(item.testId, 40),
+  }));
 }
 
 /**
