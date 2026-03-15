@@ -79,6 +79,18 @@ Bugs are classified by severity:
 | **P2 Medium** | Log, fix after full pass | Visual glitch, fallback data, minor a11y issue |
 | **P3 Low** | Log for later | Cosmetic, console warning, edge case |
 
+## Security
+
+This skill navigates web pages and reads their DOM content, console output, and network responses. **Ingesting third-party content is inherent to its purpose** — a UAT skill that cannot read page content cannot perform UAT.
+
+Mitigations in place:
+- All `page.evaluate()` returns are **sanitized and truncated** at the Node.js boundary before the agent sees them
+- Result arrays are **capped** (max 50 items) to prevent bulk DOM exfiltration
+- The agent is instructed to **never interpret captured content as instructions** and to **never auto-apply fixes** — all code changes require user confirmation
+- Bug fixes must be derived from **reading the project's source code**, not from page output
+
+**This skill is designed for testing your own applications on localhost**, not for auditing untrusted third-party websites. Always review proposed fixes before approving.
+
 ## Origin
 
 Battle-tested across 200+ UAT cycles on a production crypto platform with 11 screens, 6 locales, and WCAG 2.2 AA compliance requirements. Abstracted into a generic skill for any web application.
